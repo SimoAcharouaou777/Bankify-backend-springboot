@@ -6,6 +6,8 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -19,20 +21,19 @@ public class DelegatingJwtFilter extends OncePerRequestFilter {
     private final JwtRequestFilter jwtRequestFilter;
     private final JwtOAuth2Filter jwtOAuth2Filter;
 
-    public DelegatingJwtFilter(JwtUtil jwtUtil , JwtDecoder jwtDecoder , UserRepository userRepository){
+    @Autowired
+    public DelegatingJwtFilter(JwtUtil jwtUtil, JwtDecoder jwtDecoder, UserRepository userRepository){
         this.jwtUtil = jwtUtil;
         this.jwtRequestFilter = new JwtRequestFilter(jwtUtil);
-        this.jwtOAuth2Filter = new JwtOAuth2Filter(jwtDecoder,jwtUtil, userRepository);
+        this.jwtOAuth2Filter = new JwtOAuth2Filter(jwtDecoder, jwtUtil, userRepository);
     }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
-
         String authHeader = request.getHeader("Authorization");
         if(authHeader != null && authHeader.startsWith("Bearer ")){
             String token = authHeader.substring(7);
 
-            // if it's a custome token , call JwtRequestilter
             if(jwtUtil.isCustomToken(token)){
                 jwtRequestFilter.doFilter(request, response, filterChain);
                 return;

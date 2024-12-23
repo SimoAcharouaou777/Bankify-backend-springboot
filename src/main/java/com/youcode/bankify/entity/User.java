@@ -3,10 +3,7 @@ package com.youcode.bankify.entity;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.youcode.bankify.util.serializer.LocalDateDeserializer;
-import com.youcode.bankify.util.serializer.LocalDateTimeDeserializer;
 import jakarta.persistence.*;
-import lombok.Builder;
-import com.youcode.bankify.entity.Role;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -59,6 +56,5 @@ public class User {
             inverseJoinColumns = @JoinColumn(name = "role_id")
     )
     private Set<Role> roles;
-
 
 }

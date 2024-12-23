@@ -1,24 +1,18 @@
 package com.youcode.bankify.service;
 
-import com.youcode.bankify.dto.LoginRequest;
 import com.youcode.bankify.dto.RegisterRequest;
 import com.youcode.bankify.entity.Role;
 import com.youcode.bankify.entity.User;
 import com.youcode.bankify.repository.jpa.RoleRepository;
 import com.youcode.bankify.repository.jpa.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.AuthenticationServiceException;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
-import org.springframework.security.crypto.bcrypt.BCrypt;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
-import javax.security.sasl.AuthenticationException;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -26,24 +20,23 @@ import java.util.stream.Collectors;
 public class AuthService implements UserDetailsService {
 
 
-    private final AuthenticationManager authenticationManager;
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
-    private final UserService userService;
 
     @Autowired
-    public AuthService(AuthenticationManager authenticationManager, UserRepository userRepository, RoleRepository roleRepository, PasswordEncoder passwordEncoder, UserService userService) {
-        this.authenticationManager = authenticationManager;
+    public AuthService(UserRepository userRepository, RoleRepository roleRepository, PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.passwordEncoder = passwordEncoder;
-        this.userService = userService;
     }
 
+    /**
+     * Register a new user.
+     */
     public String register(RegisterRequest registerRequest) {
         if (userRepository.findByUsername(registerRequest.getUsername()).isPresent()) {
-            return "Username already exists";
+            throw new RuntimeException("Username already exists");
         }
         User user = new User();
         user.setUsername(registerRequest.getUsername());
@@ -57,17 +50,25 @@ public class AuthService implements UserDetailsService {
         return "User registered successfully";
     }
 
-
-
+    /**
+     * Retrieve user details by username.
+     */
     public Optional<User> getUserByUsername(String username) {
         return userRepository.findByUsername(username);
     }
 
+    /**
+     * Retrieve authorities for the user.
+     */
     public Collection<SimpleGrantedAuthority> getAuthorities(User user){
         return user.getRoles().stream()
                 .map(role -> new SimpleGrantedAuthority("ROLE_" + role.getName()))
                 .collect(Collectors.toSet());
     }
+
+    /**
+     * Load user by username for authentication.
+     */
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
         User user = userRepository.findByUsername(username)

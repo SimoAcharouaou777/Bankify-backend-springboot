@@ -2,7 +2,6 @@ package com.youcode.bankify.util;
 
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
-import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
@@ -14,14 +13,19 @@ import java.util.stream.Collectors;
 
 public class JwtAuthenticationConverterWrapper implements Converter<Jwt, AbstractAuthenticationToken> {
 
-    private final KeycloakRealmRoleConverter roleConverter = new KeycloakRealmRoleConverter();
-
     @Override
     public AbstractAuthenticationToken convert(Jwt jwt) {
-        Collection<GrantedAuthority> authorities = roleConverter.convert(jwt);
+        Map<String, Object> realmAccess = jwt.getClaim("realm_access");
+        Collection<SimpleGrantedAuthority> authorities = List.of();
+        if (realmAccess != null && realmAccess.containsKey("roles")) {
+            List<String> roles = (List<String>) realmAccess.get("roles");
+            authorities = roles.stream()
+                    .map(role -> new SimpleGrantedAuthority("ROLE_" + role.toUpperCase()))
+                    .collect(Collectors.toSet());
+        }
 
         String keycloakUsername = jwt.getClaimAsString("preferred_username");
-        if(keycloakUsername == null || keycloakUsername.isBlank()){
+        if (keycloakUsername == null || keycloakUsername.isBlank()) {
             keycloakUsername = jwt.getSubject();
         }
 

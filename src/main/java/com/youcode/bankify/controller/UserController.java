@@ -1,194 +1,319 @@
 package com.youcode.bankify.controller;
 
-
 import com.youcode.bankify.dto.*;
 import com.youcode.bankify.entity.*;
-import com.youcode.bankify.repository.jpa.AccountRepository;
 import com.youcode.bankify.service.InvoiceService;
 import com.youcode.bankify.service.LoanService;
 import com.youcode.bankify.service.UserService;
-import jakarta.servlet.http.HttpSession;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Set;
 
 @RestController
 @RequestMapping("/api/user")
 public class UserController {
 
-    @Autowired
-    UserService userService;
-    @Autowired
-    private AccountRepository accountRepository;
-    @Autowired
-    private InvoiceService invoiceService;
-    @Autowired
-    private LoanService loanService;
+    private final UserService userService;
+    private final InvoiceService invoiceService;
+    private final LoanService loanService;
 
+    @Autowired
+    public UserController(UserService userService, InvoiceService invoiceService, LoanService loanService) {
+        this.userService = userService;
+        this.invoiceService = invoiceService;
+        this.loanService = loanService;
+    }
+
+    /**
+     * Retrieve bank accounts for the authenticated user.
+     */
     @GetMapping("/accounts")
+    @PreAuthorize("hasRole('USER')")
     public ResponseEntity<List<BankAccount>> getBankAccounts(
-            HttpSession session,
+            Authentication authentication,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size){
-        Long userId = (Long) session.getAttribute("userId");
-        if(userId == null){
+            @RequestParam(defaultValue = "10") int size) {
+        Long userId = userService.getUserIdFromAuthentication(authentication);
+
+        if (userId == null) {
             return ResponseEntity.status(401).body(null);
         }
 
-        List<BankAccount> accounts = userService.getBankAccounts(userId, page,size);
+        List<BankAccount> accounts = userService.getBankAccounts(userId, page, size);
         return ResponseEntity.ok(accounts);
     }
 
+    /**
+     * Create a new bank account for the authenticated user.
+     */
     @PostMapping("/accounts")
-    public ResponseEntity<BankAccount> createBankAccount(@RequestBody AccountCreationDTO accountCreationDTO,HttpSession session ){
-        Long userId = (Long) session.getAttribute("userId");
-        if(userId == null){
-            return ResponseEntity.status(401).body(null);
-        }
-        Set<String> roles = (Set<String>) session.getAttribute("roles");
-        if(roles == null || !roles.contains("USER")){
-            return ResponseEntity.status(403).body(null);
-        }
-        try{
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<?> createBankAccount(
+            @RequestBody AccountCreationDTO accountCreationDTO,
+            Authentication authentication) {
+        Long userId = userService.getUserIdFromAuthentication(authentication);
+
+        try {
             BankAccount createdAccount = userService.createBankAccount(accountCreationDTO, userId);
             return ResponseEntity.ok(createdAccount);
-        }catch (RuntimeException e){
-            return ResponseEntity.badRequest().body(null);
+        } catch (RuntimeException e) {
+            ErrorResponse error = new ErrorResponse();
+            error.setMessage(e.getMessage());
+            error.setTimestamp(java.time.LocalDateTime.now());
+            error.setStatus(400);
+            return ResponseEntity.badRequest().body(error);
         }
-
     }
 
+    /**
+     * Retrieve transaction history for the authenticated user.
+     */
     @GetMapping("/transactions")
+    @PreAuthorize("hasRole('USER')")
     public ResponseEntity<List<TransactionResponse>> getTransactionHistory(
-            HttpSession session,
+            Authentication authentication,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size){
-        Long userId = (Long) session.getAttribute("userId");
-        if(userId == null){
-            return ResponseEntity.status(401).body(null);
-        }
+            @RequestParam(defaultValue = "10") int size) {
 
-        List<TransactionResponse> transactions = userService.getTransactionHistory(userId,page,size);
+        Long userId = userService.getUserIdFromAuthentication(authentication);
+        List<TransactionResponse> transactions = userService.getTransactionHistory(userId, page, size);
         return ResponseEntity.ok(transactions);
     }
 
+    /**
+     * Transfer funds between accounts.
+     */
     @PostMapping("/transfer")
-    public ResponseEntity<String> transferFunds(@RequestBody TransferRequest transferRequest, HttpSession session){
-        Long userId = (Long) session.getAttribute("userId");
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<?> transferFunds(
+            @RequestBody TransferRequest transferRequest,
+            Authentication authentication) {
+        Long userId = userService.getUserIdFromAuthentication(authentication);
 
-        if(userId == null){
-            return ResponseEntity.status(401).body("Unauthorized");
-        }
+        try {
+            // Ensure the 'fromAccount' belongs to the authenticated user
+            BankAccount fromAccount = userService.getAccountWithBalanceCheck(
+                    transferRequest.getFromAccount(),
+                    java.math.BigDecimal.valueOf(transferRequest.getAmount()) /* Adjust as needed */,
+                    userId
+            );
 
-        BankAccount fromAccount = accountRepository.findById(transferRequest.getFromAccount())
-                        .orElseThrow(() -> new RuntimeException("From account not found"));
-
-        if(!fromAccount.getUser().getId().equals(userId)){
-            return ResponseEntity.status(403).body("You are not authorized to transfer from this account");
-        }
-
-        if("PERMANENT".equalsIgnoreCase(transferRequest.getTransactionType())){
-            if(transferRequest.getFrequency() == null || transferRequest.getFrequency().isEmpty()){
-                return ResponseEntity.badRequest().body("Frequency is required for permanent transfers");
+            if ("PERMANENT".equalsIgnoreCase(transferRequest.getTransactionType())) {
+                if (transferRequest.getFrequency() == null || transferRequest.getFrequency().isEmpty()) {
+                    ErrorResponse error = new ErrorResponse();
+                    error.setMessage("Frequency is required for permanent transfers");
+                    error.setTimestamp(java.time.LocalDateTime.now());
+                    error.setStatus(400);
+                    return ResponseEntity.badRequest().body(error);
+                }
+                userService.schedulePermanentTransfer(transferRequest, userId);
+                return ResponseEntity.ok("Permanent transfer scheduled successfully");
+            } else {
+                userService.transferFunds(transferRequest, userId);
+                return ResponseEntity.ok("Transfer successful");
             }
-            userService.schedulePermanentTransfer(transferRequest);
-            return ResponseEntity.ok("Permanent transfer scheduled successfully");
-        }else{
-            userService.transferFunds(transferRequest);
-            return ResponseEntity.ok("Transfer successful");
+        } catch (RuntimeException e) {
+            ErrorResponse error = new ErrorResponse();
+            error.setMessage(e.getMessage());
+            error.setTimestamp(java.time.LocalDateTime.now());
+            error.setStatus(400);
+            return ResponseEntity.badRequest().body(error);
         }
-
-
-
     }
 
+    /**
+     * Update user profile.
+     */
     @PutMapping("/profile")
-    public ResponseEntity<User> updateProfile(@RequestBody User user){
-        User updateUser = userService.updateProfile(user);
-        return ResponseEntity.ok(updateUser);
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<?> updateProfile(
+            @RequestBody UserProfileUpdateDTO userProfileUpdateDTO,
+            Authentication authentication) {
+        Long userId = userService.getUserIdFromAuthentication(authentication);
+
+        try {
+            User updatedUser = userService.updateProfile(userId, userProfileUpdateDTO);
+            return ResponseEntity.ok(updatedUser);
+        } catch (RuntimeException e) {
+            ErrorResponse error = new ErrorResponse();
+            error.setMessage(e.getMessage());
+            error.setTimestamp(java.time.LocalDateTime.now());
+            error.setStatus(400);
+            return ResponseEntity.badRequest().body(error);
+        }
     }
 
+    /**
+     * Deposit money into an account.
+     */
     @PostMapping("/deposit")
-    public ResponseEntity<String> depositMoney(@RequestBody TransactionRequest transactionRequest, HttpSession session){
-        Long userId = (Long) session.getAttribute("userId");
-        if(userId == null){
-            return ResponseEntity.status(401).body("unauthorized");
-        }
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<?> depositMoney(
+            @RequestBody TransactionRequest transactionRequest,
+            Authentication authentication) {
+        Long userId = userService.getUserIdFromAuthentication(authentication);
 
-        try{
+        try {
             userService.depositMoney(userId, transactionRequest.getAccountId(), transactionRequest.getAmount());
             return ResponseEntity.ok("Money deposited successfully");
-        }catch (RuntimeException e){
-            return ResponseEntity.badRequest().body(e.getMessage());
+        } catch (RuntimeException e) {
+            ErrorResponse error = new ErrorResponse();
+            error.setMessage(e.getMessage());
+            error.setTimestamp(java.time.LocalDateTime.now());
+            error.setStatus(400);
+            return ResponseEntity.badRequest().body(error);
         }
     }
 
+    /**
+     * Withdraw money from an account.
+     */
     @PostMapping("/withdraw")
-    public ResponseEntity<String> withdrawMoney(@RequestBody TransactionRequest transactionRequest, HttpSession session){
-        Long userId = (Long) session.getAttribute("userId");
-        if(userId == null){
-            return ResponseEntity.status(401).body("unauthorized");
-        }
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<?> withdrawMoney(
+            @RequestBody TransactionRequest transactionRequest,
+            Authentication authentication) {
+        Long userId = userService.getUserIdFromAuthentication(authentication);
 
-        try{
+        try {
             userService.withdrawMoney(userId, transactionRequest.getAccountId(), transactionRequest.getAmount());
             return ResponseEntity.ok("Money withdrawn successfully");
-        }catch (RuntimeException e){
-            return ResponseEntity.badRequest().body(e.getMessage());
+        } catch (RuntimeException e) {
+            ErrorResponse error = new ErrorResponse();
+            error.setMessage(e.getMessage());
+            error.setTimestamp(java.time.LocalDateTime.now());
+            error.setStatus(400);
+            return ResponseEntity.badRequest().body(error);
         }
     }
+
+    /**
+     * Create a new invoice for the authenticated user.
+     */
     @PostMapping("/invoices")
-    public ResponseEntity<Invoice> createInvoice(@RequestBody InvoiceRequestDTO invoiceRequest, HttpSession session){
-        Long userId = (Long) session.getAttribute("userId");
-        if(userId == null){
-            return ResponseEntity.status(401).body(null);
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<?> createInvoice(
+            @RequestBody InvoiceRequestDTO invoiceRequest,
+            Authentication authentication) {
+        Long userId = userService.getUserIdFromAuthentication(authentication);
+
+        try {
+            Invoice invoice = invoiceService.createInvoice(invoiceRequest, userId);
+            return ResponseEntity.ok(invoice);
+        } catch (RuntimeException e) {
+            ErrorResponse error = new ErrorResponse();
+            error.setMessage(e.getMessage());
+            error.setTimestamp(java.time.LocalDateTime.now());
+            error.setStatus(400);
+            return ResponseEntity.badRequest().body(error);
         }
-        Invoice invoice = invoiceService.createInvoice(invoiceRequest,userId);
-        return ResponseEntity.ok(invoice);
     }
 
+    /**
+     * Retrieve invoices for the authenticated user.
+     */
     @GetMapping("/invoices")
-    public ResponseEntity<List<InvoiceResponseDTO>> getInvoices(HttpSession session){
-        Long userId = (Long) session.getAttribute("userId");
-        if(userId == null){
-            return ResponseEntity.status(401).body(null);
-        }
-        List<InvoiceResponseDTO> invoices = invoiceService.getInvoices(userId);
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<?> getInvoices(Authentication authentication) {
+        Long userId = userService.getUserIdFromAuthentication(authentication);
+
+        try {
+            List<InvoiceResponseDTO> invoices = invoiceService.getInvoices(userId);
             return ResponseEntity.ok(invoices);
-
+        } catch (RuntimeException e) {
+            ErrorResponse error = new ErrorResponse();
+            error.setMessage(e.getMessage());
+            error.setTimestamp(java.time.LocalDateTime.now());
+            error.setStatus(400);
+            return ResponseEntity.badRequest().body(error);
+        }
     }
 
+    /**
+     * Update the status of an invoice.
+     * Restricted to ADMIN and EMPLOYEE roles.
+     */
     @PutMapping("/invoices/{id}/status")
-    public ResponseEntity<Invoice> updateInvoiceStatus(@PathVariable Long id , @RequestParam String status){
-        Invoice invoice = invoiceService.updateInvoiceStatus(id,status);
-        return ResponseEntity.ok(invoice);
+    @PreAuthorize("hasRole('ADMIN') or hasRole('EMPLOYEE')")
+    public ResponseEntity<?> updateInvoiceStatus(
+            @PathVariable Long id,
+            @RequestParam String status) {
+        try {
+            Invoice invoice = invoiceService.updateInvoiceStatus(id, status);
+            return ResponseEntity.ok(invoice);
+        } catch (RuntimeException e) {
+            ErrorResponse error = new ErrorResponse();
+            error.setMessage(e.getMessage());
+            error.setTimestamp(java.time.LocalDateTime.now());
+            error.setStatus(400);
+            return ResponseEntity.badRequest().body(error);
+        }
     }
 
+    /**
+     * Apply for a loan.
+     */
     @PostMapping("/loans")
-    public ResponseEntity<Loan> applyForLoan(@RequestBody LoanRequestDTO loanRequest, HttpSession session) {
-        Long userId = (Long) session.getAttribute("userId");
-        if (userId == null) {
-            return ResponseEntity.status(401).body(null);
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<?> applyForLoan(
+            @RequestBody LoanRequestDTO loanRequest,
+            Authentication authentication) {
+        Long userId = userService.getUserIdFromAuthentication(authentication);
+
+        try {
+            Loan loan = loanService.applyForLoan(loanRequest, userId);
+            return ResponseEntity.ok(loan);
+        } catch (RuntimeException e) {
+            ErrorResponse error = new ErrorResponse();
+            error.setMessage(e.getMessage());
+            error.setTimestamp(java.time.LocalDateTime.now());
+            error.setStatus(400);
+            return ResponseEntity.badRequest().body(error);
         }
-        Loan loan = loanService.applyForLoan(loanRequest, userId);
-        return ResponseEntity.ok(loan);
-    }
-    @GetMapping("/loans")
-    public ResponseEntity<List<LoanResponseDTO>> getLoans(HttpSession session) {
-        Long userId = (Long) session.getAttribute("userId");
-        if (userId == null) {
-            return ResponseEntity.status(401).body(null);
-        }
-        List<LoanResponseDTO> loans = loanService.getLoans(userId);
-        return ResponseEntity.ok(loans);
-    }
-    @PutMapping("/loans/{id}/status")
-    public ResponseEntity<Loan> approveOrRejectLoan(@PathVariable Long id, @RequestParam String status) {
-        Loan loan = loanService.approveOrRejectLoan(id, status);
-        return ResponseEntity.ok(loan);
     }
 
+    /**
+     * Retrieve loans for the authenticated user.
+     */
+    @GetMapping("/loans")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<?> getLoans(Authentication authentication) {
+        Long userId = userService.getUserIdFromAuthentication(authentication);
+
+        try {
+            List<LoanResponseDTO> loans = loanService.getLoans(userId);
+            return ResponseEntity.ok(loans);
+        } catch (RuntimeException e) {
+            ErrorResponse error = new ErrorResponse();
+            error.setMessage(e.getMessage());
+            error.setTimestamp(java.time.LocalDateTime.now());
+            error.setStatus(400);
+            return ResponseEntity.badRequest().body(error);
+        }
+    }
+
+    /**
+     * Approve or reject a loan.
+     * Restricted to ADMIN and EMPLOYEE roles.
+     */
+    @PutMapping("/loans/{id}/status")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('EMPLOYEE')")
+    public ResponseEntity<?> approveOrRejectLoan(
+            @PathVariable Long id,
+            @RequestParam String status) {
+        try {
+            Loan loan = loanService.approveOrRejectLoan(id, status);
+            return ResponseEntity.ok(loan);
+        } catch (RuntimeException e) {
+            ErrorResponse error = new ErrorResponse();
+            error.setMessage(e.getMessage());
+            error.setTimestamp(java.time.LocalDateTime.now());
+            error.setStatus(400);
+            return ResponseEntity.badRequest().body(error);
+        }
+    }
 }

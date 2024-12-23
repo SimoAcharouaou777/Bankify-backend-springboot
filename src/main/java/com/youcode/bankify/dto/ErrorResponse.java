@@ -1,14 +1,18 @@
 package com.youcode.bankify.dto;
 
-public class ErrorResponse {
+import com.fasterxml.jackson.annotation.JsonFormat;
+import lombok.Getter;
+import lombok.Setter;
 
+import java.time.LocalDateTime;
+
+@Getter
+@Setter
+public class ErrorResponse {
     private String message;
 
-    public ErrorResponse(String message){
-        this.message = message;
-    }
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime timestamp;
 
-    public String getMessage() {
-        return message;
-    }
+    private int status;
 }

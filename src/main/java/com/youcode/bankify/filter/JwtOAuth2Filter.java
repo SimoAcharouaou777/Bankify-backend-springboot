@@ -14,6 +14,7 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.BearerTokenAuthenticationToken;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationProvider;
 import org.springframework.web.filter.OncePerRequestFilter;
+
 import java.io.IOException;
 
 public class JwtOAuth2Filter extends OncePerRequestFilter {
@@ -30,15 +31,19 @@ public class JwtOAuth2Filter extends OncePerRequestFilter {
     }
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
+    protected void doFilterInternal(HttpServletRequest request,
+                                    HttpServletResponse response,
+                                    FilterChain filterChain) throws ServletException, IOException {
         String authorizationHeader = request.getHeader("Authorization");
         if(authorizationHeader != null && authorizationHeader.startsWith("Bearer ")){
             String token = authorizationHeader.substring(7);
 
             if(jwtUtil.isCustomToken(token)){
+                // Custom token should not be processed by this filter
                 filterChain.doFilter(request, response);
                 return;
             }
+
             try {
                 var authentication = jwtAuthProvider.authenticate(new BearerTokenAuthenticationToken(token));
                 SecurityContextHolder.getContext().setAuthentication(authentication);
@@ -57,15 +62,18 @@ public class JwtOAuth2Filter extends OncePerRequestFilter {
                         User newUser = new User();
                         newUser.setKeycloakId(keycloakSub);
                         newUser.setUsername(preferredUsername);
-                        newUser.setPassword("N/A");
-                        newUser.setEnabled(true);
+                        newUser.setPassword("N/A"); // Dummy password
+
                         userRepository.save(newUser);
+                        logger.info("Created new local user for Keycloak principal: " + preferredUsername);
                     }
                 }
-            }catch (Exception e){
+            } catch (Exception e){
+                logger.error("Keycloak token authentication failed: " + e.getMessage());
                 SecurityContextHolder.clearContext();
             }
         }
+
         filterChain.doFilter(request, response);
     }
 }
