@@ -386,3 +386,16 @@ databaseChangeLog:
                   type: "varchar(50)"
                   constraints:
                     nullable: true
+  - changeSet:
+      id: "13"
+      author: "SimoAcharouaou777"
+      changes:
+        - addColumn:
+            tableName: "users"
+            columns:
+              - column:
+                  name: "keycloak_id"
+                  type: "varchar(255)"
+                  constraints:
+                    nullable: true
+                    unique: true

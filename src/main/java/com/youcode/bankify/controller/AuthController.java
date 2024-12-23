@@ -37,40 +37,35 @@ public class AuthController {
     @PostMapping("/register")
     public ResponseEntity<?> registerUser(@RequestBody RegisterRequest registerRequest) {
         String response = authService.register(registerRequest);
-        Map<String, String> responseBody = new HashMap<>();
-
-        if (response.equals("User registered successfully")) {
-            responseBody.put("message", "User registered successfully");
-            return ResponseEntity.ok(responseBody);
-        } else {
-            responseBody.put("message", response);
-            return ResponseEntity.badRequest().body(responseBody);
+        if(response.equals("User registered successfully!")) {
+            return ResponseEntity.ok(response);
+        }
+        else {
+            return ResponseEntity.badRequest().body(new ErrorResponse(response));
         }
     }
 
     @PostMapping("/login")
     public ResponseEntity<?> loginUser(@RequestBody LoginRequest loginRequest) {
-       try{
-            authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(loginRequest.getUsername(), loginRequest.getPassword())
-            );
-            final User user = authService.getUserByUsername(loginRequest.getUsername())
-                    .orElseThrow(() -> new RuntimeException("User not found"));
-            final String accessToken = jwtUtil.generateToken(user);
+      try{
+          authenticationManager.authenticate(
+                  new UsernamePasswordAuthenticationToken(loginRequest.getUsername(),loginRequest.getPassword())
+          );
 
-            final String refreshToken = jwtUtil.generateRefreshToken(user);
+          User user = authService.getUserByUsername(loginRequest.getUsername())
+                  .orElseThrow(() -> new RuntimeException("User not found."));
 
-            if(accessToken == null || accessToken.split("\\.").length != 3){
-                return ResponseEntity.status(500).body("Internal server error: Invalid JWT format");
-            }
+          String accessToken = jwtUtil.generateToken(user, authService.getAuthorities(user));
+          String refreshToken = jwtUtil.generateRefreshToken(user);
 
-            Map<String , String > response = new HashMap<>();
-            response.put("token", accessToken);
-            response.put("refreshToken", refreshToken);
-            return ResponseEntity.ok(response);
-       } catch (AuthenticationException e){
-           return ResponseEntity.status(401).body("Invalid username or password");
-       }
+          Map<String, String > tokens = new HashMap<>();
+          tokens.put("access_token", accessToken);
+          tokens.put("refresh_token", refreshToken);
+
+          return ResponseEntity.ok(tokens);
+      } catch (AuthenticationException e){
+          return ResponseEntity.status(401).body(new ErrorResponse("Invalid username or password."));
+      }
     }
 
     @PostMapping("/refresh")
@@ -89,8 +84,14 @@ public class AuthController {
                 return ResponseEntity.status(401).body("Refresh token is expired.");
             }
 
-            final String newAccessToken = jwtUtil.generateToken(authService.getUserByUsername(username).orElseThrow());
-            return ResponseEntity.ok(newAccessToken);
+            User user = authService.getUserByUsername(username)
+                    .orElseThrow(() -> new RuntimeException("User not found."));
+
+             String newAccessToken = jwtUtil.generateToken(user, authService.getAuthorities(user));
+
+             Map<String, String> token = new HashMap<>();
+             token.put("access_token", newAccessToken);
+            return ResponseEntity.ok(token);
         }catch(Exception e){
             return ResponseEntity.status(500).body("Internal server error: " + e.getMessage());
         }
