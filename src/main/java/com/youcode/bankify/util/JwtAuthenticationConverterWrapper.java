@@ -17,6 +17,7 @@ public class JwtAuthenticationConverterWrapper implements Converter<Jwt, Abstrac
     public AbstractAuthenticationToken convert(Jwt jwt) {
         Map<String, Object> realmAccess = jwt.getClaim("realm_access");
         Collection<SimpleGrantedAuthority> authorities = List.of();
+
         if (realmAccess != null && realmAccess.containsKey("roles")) {
             List<String> roles = (List<String>) realmAccess.get("roles");
             authorities = roles.stream()
