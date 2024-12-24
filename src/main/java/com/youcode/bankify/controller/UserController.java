@@ -5,6 +5,7 @@ import com.youcode.bankify.entity.*;
 import com.youcode.bankify.service.InvoiceService;
 import com.youcode.bankify.service.LoanService;
 import com.youcode.bankify.service.UserService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -13,6 +14,8 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+
+@Slf4j
 @RestController
 @RequestMapping("/api/user")
 public class UserController {
@@ -55,6 +58,9 @@ public class UserController {
     public ResponseEntity<?> createBankAccount(
             @RequestBody AccountCreationDTO accountCreationDTO,
             Authentication authentication) {
+
+        System.out.println("DEBUG: Entering createBankAccount() with authentication=" + authentication);
+        System.out.println("DEBUG: Authorities=" + authentication.getAuthorities());
         Long userId = userService.getUserIdFromAuthentication(authentication);
 
         try {
@@ -95,7 +101,7 @@ public class UserController {
         Long userId = userService.getUserIdFromAuthentication(authentication);
 
         try {
-            // Ensure the 'fromAccount' belongs to the authenticated user
+
             BankAccount fromAccount = userService.getAccountWithBalanceCheck(
                     transferRequest.getFromAccount(),
                     java.math.BigDecimal.valueOf(transferRequest.getAmount()) /* Adjust as needed */,
@@ -113,7 +119,7 @@ public class UserController {
                 userService.schedulePermanentTransfer(transferRequest, userId);
                 return ResponseEntity.ok("Permanent transfer scheduled successfully");
             } else {
-                userService.transferFunds(transferRequest, userId);
+                userService.transferFunds(transferRequest, authentication);
                 return ResponseEntity.ok("Transfer successful");
             }
         } catch (RuntimeException e) {

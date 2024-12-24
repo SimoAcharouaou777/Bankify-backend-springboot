@@ -31,7 +31,7 @@ public class ScheduledTransferService {
                 transferRequest.setAmount(transfer.getAmount().doubleValue());
                 transferRequest.setTransactionType("PERMANENT");
 
-                userService.transferFunds(transferRequest, transfer.getUserId());
+                userService.transferFundsForScheduledJob(transferRequest);
 
                 transfer.setNextExecutionDate(calculateNextExecutionDate(transfer));
                 scheduledTransferRepository.save(transfer);

@@ -15,4 +15,12 @@ public class ErrorResponse {
     private LocalDateTime timestamp;
 
     private int status;
+
+    public ErrorResponse(){}
+
+    public ErrorResponse(String message){
+        this.message = message;
+        this.timestamp = LocalDateTime.now();
+        this.status = 400;
+    }
 }

@@ -118,14 +118,15 @@ public class UserService {
     /**
      * Handle fund transfers based on the transaction type.
      */
-    public void handleTransfer(TransferRequest transferRequest, Long userId) {
+        public void handleTransfer(TransferRequest transferRequest, Authentication authentication) {
         String transactionType = transferRequest.getTransactionType().toUpperCase();
         switch (transactionType) {
             case "CLASSIC":
             case "INSTANT":
-                transferFunds(transferRequest, userId);
+                transferFunds(transferRequest, authentication);
                 break;
             case "PERMANENT":
+                Long userId = getUserIdFromAuthentication(authentication);
                 schedulePermanentTransfer(transferRequest, userId);
                 break;
             default:
@@ -136,9 +137,13 @@ public class UserService {
     /**
      * Transfer funds between accounts.
      */
-    public void transferFunds(TransferRequest transferRequest, Long userId) {
-        BigDecimal transactionFee = calculateTransactionFee(transferRequest.getTransactionType(), transferRequest.getAmount());
+    public void transferFunds(TransferRequest transferRequest, Authentication authentication) {
+        String username = authentication.getName();
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        Long userId = user.getId();
 
+        BigDecimal transactionFee = calculateTransactionFee(transferRequest.getTransactionType(), transferRequest.getAmount());
         BigDecimal totalDebitAmount = BigDecimal.valueOf(transferRequest.getAmount()).add(transactionFee);
         BankAccount fromAccount = getAccountWithBalanceCheck(transferRequest.getFromAccount(), totalDebitAmount, userId);
         BankAccount toAccount = accountRepository.findById(transferRequest.getToAccount())
@@ -147,9 +152,25 @@ public class UserService {
         processTransfer(fromAccount, toAccount, BigDecimal.valueOf(transferRequest.getAmount()), transactionFee);
     }
 
-    /**
-     * Schedule a permanent (recurring) transfer.
-     */
+    public void transferFundsForScheduledJob(TransferRequest transferRequest) {
+        BigDecimal transactionFee = calculateTransactionFee(
+                transferRequest.getTransactionType(),
+                transferRequest.getAmount()
+        );
+        BigDecimal totalDebitAmount = BigDecimal.valueOf(transferRequest.getAmount()).add(transactionFee);
+
+        BankAccount fromAccount = accountRepository.findById(transferRequest.getFromAccount())
+                .orElseThrow(() -> new RuntimeException("From account not found"));
+
+        if(fromAccount.getBalance().compareTo(totalDebitAmount) < 0){
+            throw new RuntimeException("Insufficient funds for scheduled transfer");
+        }
+
+        BankAccount toAccount = accountRepository.findById(transferRequest.getToAccount())
+                .orElseThrow(() -> new RuntimeException("To account not found"));
+
+        processTransfer(fromAccount, toAccount, BigDecimal.valueOf(transferRequest.getAmount()), transactionFee);
+    }
     public void schedulePermanentTransfer(TransferRequest transferRequest, Long userId) {
         BankAccount fromAccount = accountRepository.findById(transferRequest.getFromAccount())
                 .orElseThrow(() -> new RuntimeException("From account not found"));
