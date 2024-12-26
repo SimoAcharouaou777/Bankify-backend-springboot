@@ -3,10 +3,13 @@ package com.youcode.bankify.controller;
 import com.youcode.bankify.dto.ErrorResponse;
 import com.youcode.bankify.dto.LoginRequest;
 import com.youcode.bankify.dto.RegisterRequest;
+import com.youcode.bankify.dto.SuccessResponse;
 import com.youcode.bankify.entity.User;
+import com.youcode.bankify.exception.UsernameAlreadyExistsException;
 import com.youcode.bankify.service.AuthService;
 import com.youcode.bankify.util.JwtUtil;
 import jakarta.servlet.http.HttpServletRequest;
+import org.apache.http.HttpStatus;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -17,7 +20,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.HashMap;
 import java.util.Map;
 
-@CrossOrigin(origins = "http://localhost:3000", allowCredentials = "true")
+@CrossOrigin(origins = "http://localhost:4200")
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
@@ -35,13 +38,14 @@ public class AuthController {
 
     @PostMapping("/register")
     public ResponseEntity<?> registerUser(@RequestBody RegisterRequest registerRequest) {
-        String response = authService.register(registerRequest);
-        if(response.equals("User registered successfully")){
-            return ResponseEntity.ok(response);
-        }
-        else {
-            return ResponseEntity.badRequest().body(new ErrorResponse(response));
-        }
+       try {
+           authService.register(registerRequest);
+           return ResponseEntity.ok(new SuccessResponse("User registered successfully"));
+       } catch (UsernameAlreadyExistsException e){
+           return ResponseEntity.status(HttpStatus.SC_CONFLICT).body(new ErrorResponse(e.getMessage()));
+       } catch (Exception e){
+           return ResponseEntity.status(HttpStatus.SC_INTERNAL_SERVER_ERROR).body(new ErrorResponse("Registration failed"));
+       }
     }
 
     @PostMapping("/login")

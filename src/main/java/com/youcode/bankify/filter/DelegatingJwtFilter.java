@@ -10,12 +10,21 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.stereotype.Component;
+import org.springframework.util.AntPathMatcher;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.List;
 
 @Component
 public class DelegatingJwtFilter extends OncePerRequestFilter {
+
+    private static final List<String> EXCLUDED_URLS = Arrays.asList(
+            "/api/auth/**"
+    );
+
+    private AntPathMatcher pathMatcher = new AntPathMatcher();
 
     private final JwtUtil jwtUtil;
     private final JwtRequestFilter jwtRequestFilter;
@@ -30,6 +39,16 @@ public class DelegatingJwtFilter extends OncePerRequestFilter {
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
+
+        String requestPath = request.getRequestURI();
+        for(String pattern : EXCLUDED_URLS){
+            if(pathMatcher.match(pattern, requestPath)){
+                logger.debug("Excluding path from JWT filter : "+ requestPath);
+                filterChain.doFilter(request, response);
+                return;
+            }
+        }
+        logger.debug("Processing path through JWT filter" + requestPath);
         String authHeader = request.getHeader("Authorization");
         if(authHeader != null && authHeader.startsWith("Bearer ")){
             String token = authHeader.substring(7);
