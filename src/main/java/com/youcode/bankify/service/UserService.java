@@ -352,5 +352,8 @@ public class UserService {
         return dto;
     }
 
-    // Implement other service methods as needed...
+    public User getUserById(Long userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+    }
 }

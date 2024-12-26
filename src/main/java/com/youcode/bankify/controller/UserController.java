@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-
+@CrossOrigin(origins = "http://localhost:4200")
 @Slf4j
 @RestController
 @RequestMapping("/api/user")
@@ -151,6 +151,18 @@ public class UserController {
             error.setStatus(400);
             return ResponseEntity.badRequest().body(error);
         }
+    }
+
+    /**
+     * Retrieve user profile.
+     */
+
+    @GetMapping("/profile")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<?> getProfile(Authentication authentication){
+        Long userId = userService.getUserIdFromAuthentication(authentication);
+        User user = userService.getUserById(userId);
+        return ResponseEntity.ok(user);
     }
 
     /**

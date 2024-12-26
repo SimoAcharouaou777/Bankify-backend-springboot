@@ -63,10 +63,15 @@ public class AuthController {
             // Generate tokens
             String accessToken = jwtUtil.generateToken(user, authService.getAuthorities(user));
             String refreshToken = jwtUtil.generateRefreshToken(user);
+            String role = user.getRoles().stream()
+                    .findFirst()
+                    .map(r -> r.getName().replace("ROLE_", ""))
+                    .orElse(null);
 
             Map<String, String> tokens = new HashMap<>();
             tokens.put("accessToken", accessToken);
             tokens.put("refreshToken", refreshToken);
+            tokens.put("role", role);
 
             return ResponseEntity.ok(tokens);
         } catch (AuthenticationException e){
