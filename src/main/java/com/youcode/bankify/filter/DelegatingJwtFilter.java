@@ -21,7 +21,9 @@ import java.util.List;
 public class DelegatingJwtFilter extends OncePerRequestFilter {
 
     private static final List<String> EXCLUDED_URLS = Arrays.asList(
-            "/api/auth/**"
+            "/api/auth/register",
+            "/api/auth/login",
+            "/api/auth/refresh"
     );
 
     private AntPathMatcher pathMatcher = new AntPathMatcher();
@@ -48,7 +50,7 @@ public class DelegatingJwtFilter extends OncePerRequestFilter {
                 return;
             }
         }
-        logger.debug("Processing path through JWT filter" + requestPath);
+
         String authHeader = request.getHeader("Authorization");
         if(authHeader != null && authHeader.startsWith("Bearer ")){
             String token = authHeader.substring(7);

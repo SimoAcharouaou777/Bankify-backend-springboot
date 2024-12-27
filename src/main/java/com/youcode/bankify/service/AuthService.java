@@ -23,12 +23,16 @@ public class AuthService implements UserDetailsService {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
+    private final RefreshTokenService refreshTokenService;
+    private final BlackListedTokenService blackListedTokenService;
 
     @Autowired
-    public AuthService(UserRepository userRepository, RoleRepository roleRepository, PasswordEncoder passwordEncoder) {
+    public AuthService(UserRepository userRepository, RoleRepository roleRepository, PasswordEncoder passwordEncoder, RefreshTokenService refreshTokenService, BlackListedTokenService blackListedTokenService) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.passwordEncoder = passwordEncoder;
+        this.refreshTokenService = refreshTokenService;
+        this.blackListedTokenService = blackListedTokenService;
     }
 
     /**
@@ -67,6 +71,14 @@ public class AuthService implements UserDetailsService {
     }
 
     /**
+     * Invalid refresh token
+     */
+
+    public void invalidateRefreshToken(String refreshToken){
+        refreshTokenService.deleteRefreshToken(refreshToken);
+    }
+
+    /**
      * Load user by username for authentication.
      */
     @Override
@@ -76,5 +88,13 @@ public class AuthService implements UserDetailsService {
         Set<SimpleGrantedAuthority> authorities = getAuthorities(user).stream()
                 .collect(Collectors.toSet());
         return new org.springframework.security.core.userdetails.User(user.getUsername(), user.getPassword(), authorities);
+    }
+
+    public void blacklistAccessToken(String  accessToken) {
+        blackListedTokenService.blacklistToken(accessToken);
+    }
+
+    public boolean isAccessTokenBlacklisted(String accessToken) {
+        return blackListedTokenService.isTokenBlackListed(accessToken);
     }
 }

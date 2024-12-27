@@ -399,3 +399,64 @@ databaseChangeLog:
                   constraints:
                     nullable: true
                     unique: true
+  - changeSet:
+        id: "14"
+        author: "SimoAcharouaou777"
+        changes:
+          - createTable:
+              tableName: "refresh_tokens"
+              columns:
+                - column:
+                    name: "id"
+                    type: "bigint"
+                    autoIncrement: true
+                    constraints:
+                      primaryKey: true
+                      nullable: false
+                - column:
+                    name: "token"
+                    type: "varchar(255)"
+                    constraints:
+                      nullable: false
+                      unique: true
+                - column:
+                    name: "expiry_date"
+                    type: "timestamp"
+                    constraints:
+                      nullable: false
+                - column:
+                    name: "user_id"
+                    type: "bigint"
+                    constraints:
+                      nullable: false
+          - addForeignKeyConstraint:
+              baseTableName: "refresh_tokens"
+              baseColumnNames: "user_id"
+              referencedTableName: "users"
+              referencedColumnNames: "id"
+              constraintName: "fk_refresh_tokens_user"
+  - changeSet:
+        id: "15"
+        author: "SimoAcharouaou777"
+        changes:
+          - createTable:
+              tableName: "blacklisted_tokens"
+              columns:
+                - column:
+                    name: "id"
+                    type: "bigint"
+                    autoIncrement: true
+                    constraints:
+                      primaryKey: true
+                      nullable: false
+                - column:
+                    name: "token"
+                    type: "varchar(255)"
+                    constraints:
+                      nullable: false
+                      unique: true
+                - column:
+                    name: "black_listed_at"
+                    type: "timestamp"
+                    constraints:
+                      nullable: false

@@ -1,12 +1,11 @@
 package com.youcode.bankify.controller;
 
-import com.youcode.bankify.dto.ErrorResponse;
-import com.youcode.bankify.dto.LoginRequest;
-import com.youcode.bankify.dto.RegisterRequest;
-import com.youcode.bankify.dto.SuccessResponse;
+import com.youcode.bankify.dto.*;
+import com.youcode.bankify.entity.RefreshToken;
 import com.youcode.bankify.entity.User;
 import com.youcode.bankify.exception.UsernameAlreadyExistsException;
 import com.youcode.bankify.service.AuthService;
+import com.youcode.bankify.service.RefreshTokenService;
 import com.youcode.bankify.util.JwtUtil;
 import jakarta.servlet.http.HttpServletRequest;
 import org.apache.http.HttpStatus;
@@ -28,12 +27,14 @@ public class AuthController {
     private final AuthService authService;
     private final JwtUtil jwtUtil;
     private final AuthenticationManager authenticationManager;
+    private final RefreshTokenService refreshTokenService;
 
     @Autowired
-    public AuthController(AuthService authService, JwtUtil jwtUtil, AuthenticationManager authenticationManager) {
+    public AuthController(AuthService authService, JwtUtil jwtUtil, AuthenticationManager authenticationManager, RefreshTokenService refreshTokenService) {
         this.authService = authService;
         this.jwtUtil = jwtUtil;
         this.authenticationManager = authenticationManager;
+        this.refreshTokenService = refreshTokenService;
     }
 
     @PostMapping("/register")
@@ -62,7 +63,7 @@ public class AuthController {
 
             // Generate tokens
             String accessToken = jwtUtil.generateToken(user, authService.getAuthorities(user));
-            String refreshToken = jwtUtil.generateRefreshToken(user);
+            RefreshToken refreshToken = refreshTokenService.createRefreshToken(user);
             String role = user.getRoles().stream()
                     .findFirst()
                     .map(r -> r.getName().replace("ROLE_", ""))
@@ -70,7 +71,7 @@ public class AuthController {
 
             Map<String, String> tokens = new HashMap<>();
             tokens.put("accessToken", accessToken);
-            tokens.put("refreshToken", refreshToken);
+            tokens.put("refreshToken", refreshToken.getToken());
             tokens.put("role", role);
 
             return ResponseEntity.ok(tokens);
@@ -84,19 +85,20 @@ public class AuthController {
         String authorizationHeader = request.getHeader("Authorization");
 
         if(authorizationHeader == null || !authorizationHeader.startsWith("Bearer ")){
-            return ResponseEntity.status(401).body("Refresh token is missing or invalid.");
+            return ResponseEntity.status(HttpStatus.SC_UNAUTHORIZED).body(new ErrorResponse("Refresh token is missing"));
         }
 
-        String refreshToken = authorizationHeader.substring(7);
+        String refreshTokenStr = authorizationHeader.substring(7);
 
         try{
-            String username = jwtUtil.extractUsername(refreshToken);
-            if(jwtUtil.isTokenExpired(refreshToken)){
-                return ResponseEntity.status(401).body("Refresh token is expired.");
-            }
 
-            User user = authService.getUserByUsername(username)
-                    .orElseThrow(() -> new RuntimeException("User not found"));
+            RefreshToken refreshToken = refreshTokenService.findByToken(refreshTokenStr)
+                    .orElseThrow(() -> new RuntimeException("Refresh token not found"));
+
+            refreshTokenService.verifyExpiration(refreshToken);
+
+            User user = refreshToken.getUser();
+
 
             String newAccessToken = jwtUtil.generateToken(user, authService.getAuthorities(user));
 
@@ -105,6 +107,29 @@ public class AuthController {
             return ResponseEntity.ok(token);
         } catch(Exception e){
             return ResponseEntity.status(500).body("Internal server error: " + e.getMessage());
+        }
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<?> logoutUser(@RequestBody LogoutRequest logoutRequest, @RequestHeader(name = "Authorization", required = false) String authorizationHeader) {
+
+        String refreshToken = logoutRequest.getRefreshToken();
+
+        if(refreshToken == null || refreshToken.isEmpty()){
+            return ResponseEntity.badRequest().body(new ErrorResponse("Refresh token is missing"));
+        }
+
+        try{
+            authService.invalidateRefreshToken(refreshToken);
+            if(authorizationHeader != null && authorizationHeader.startsWith("Bearer ")){
+                String accessToken = authorizationHeader.substring(7);
+                authService.blacklistAccessToken(accessToken);
+            }
+
+            return ResponseEntity.ok(new SuccessResponse("User logged out successfully"));
+
+        }catch (Exception e){
+            return ResponseEntity.status(500).body(new ErrorResponse("Internal server error: " + e.getMessage()));
         }
     }
 }
