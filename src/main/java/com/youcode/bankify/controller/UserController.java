@@ -12,7 +12,9 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @CrossOrigin(origins = "http://localhost:4200")
 @Slf4j
@@ -170,20 +172,22 @@ public class UserController {
      */
     @PostMapping("/deposit")
     @PreAuthorize("hasRole('USER')")
-    public ResponseEntity<?> depositMoney(
+    public ResponseEntity<Map<String,String>> depositMoney(
             @RequestBody TransactionRequest transactionRequest,
             Authentication authentication) {
         Long userId = userService.getUserIdFromAuthentication(authentication);
 
         try {
             userService.depositMoney(userId, transactionRequest.getAccountId(), transactionRequest.getAmount());
-            return ResponseEntity.ok("Money deposited successfully");
+            Map<String,String> response = new HashMap<>();
+            response.put("message","Money deposited successfully");
+            return ResponseEntity.ok(response);
         } catch (RuntimeException e) {
-            ErrorResponse error = new ErrorResponse();
-            error.setMessage(e.getMessage());
-            error.setTimestamp(java.time.LocalDateTime.now());
-            error.setStatus(400);
-            return ResponseEntity.badRequest().body(error);
+            Map<String,String> errorResponse  = new HashMap<>();
+            errorResponse.put("message",e.getMessage());
+            errorResponse.put("timestamp",java.time.LocalDateTime.now().toString());
+            errorResponse.put("status","400");
+            return ResponseEntity.badRequest().body(errorResponse);
         }
     }
 
@@ -192,20 +196,22 @@ public class UserController {
      */
     @PostMapping("/withdraw")
     @PreAuthorize("hasRole('USER')")
-    public ResponseEntity<?> withdrawMoney(
+    public ResponseEntity<Map<String,String>> withdrawMoney(
             @RequestBody TransactionRequest transactionRequest,
             Authentication authentication) {
         Long userId = userService.getUserIdFromAuthentication(authentication);
 
         try {
             userService.withdrawMoney(userId, transactionRequest.getAccountId(), transactionRequest.getAmount());
-            return ResponseEntity.ok("Money withdrawn successfully");
+            Map<String, String> response = new HashMap<>();
+            response.put("message", "Money withdrawn successfully");
+            return ResponseEntity.ok(response);
         } catch (RuntimeException e) {
-            ErrorResponse error = new ErrorResponse();
-            error.setMessage(e.getMessage());
-            error.setTimestamp(java.time.LocalDateTime.now());
-            error.setStatus(400);
-            return ResponseEntity.badRequest().body(error);
+            Map<String, String> errorResponse = new HashMap<>();
+            errorResponse.put("message", e.getMessage());
+            errorResponse.put("timestamp", java.time.LocalDateTime.now().toString());
+            errorResponse.put("status", "400");
+            return ResponseEntity.badRequest().body(errorResponse);
         }
     }
 
