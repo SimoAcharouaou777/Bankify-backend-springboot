@@ -122,7 +122,9 @@ public class UserController {
                 return ResponseEntity.ok("Permanent transfer scheduled successfully");
             } else {
                 userService.transferFunds(transferRequest, authentication);
-                return ResponseEntity.ok("Transfer successful");
+                Map<String,String> response = new HashMap<>();
+                response.put("message","Transfer successful");
+                return ResponseEntity.ok(response);
             }
         } catch (RuntimeException e) {
             ErrorResponse error = new ErrorResponse();
