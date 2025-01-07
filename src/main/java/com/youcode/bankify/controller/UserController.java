@@ -119,7 +119,9 @@ public class UserController {
                     return ResponseEntity.badRequest().body(error);
                 }
                 userService.schedulePermanentTransfer(transferRequest, userId);
-                return ResponseEntity.ok("Permanent transfer scheduled successfully");
+                Map<String,String> response = new HashMap<>();
+                response.put("message", "Permaent transfer scheduled successfully");
+                return ResponseEntity.ok(response);
             } else {
                 userService.transferFunds(transferRequest, authentication);
                 Map<String,String> response = new HashMap<>();

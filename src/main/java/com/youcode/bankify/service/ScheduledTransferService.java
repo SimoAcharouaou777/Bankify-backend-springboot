@@ -50,6 +50,8 @@ public class ScheduledTransferService {
         LocalDateTime nextExecutionDate = transfer.getNextExecutionDate();
 
         switch (transfer.getFrequency().toUpperCase()){
+            case "DAILY":
+                return nextExecutionDate.plusDays(1);
             case "WEEKLY":
                 return nextExecutionDate.plusWeeks(1);
             case "MONTHLY":

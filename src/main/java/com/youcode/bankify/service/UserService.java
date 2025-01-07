@@ -327,6 +327,8 @@ public class UserService {
     private LocalDateTime calculateInitialExecutionDate(String frequency) {
         LocalDateTime currentDate = LocalDateTime.now();
         switch (frequency.toUpperCase()) {
+            case "DAILY":
+                return currentDate.plusDays(1);
             case "WEEKLY":
                 return currentDate.plusWeeks(1);
             case "MONTHLY":
