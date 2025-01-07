@@ -166,7 +166,7 @@ public class UserService {
             throw new RuntimeException("Insufficient funds for scheduled transfer");
         }
 
-        BankAccount toAccount = accountRepository.findById(transferRequest.getToAccount())
+        BankAccount toAccount = accountRepository.findByAccountNumber(transferRequest.getToAccount())
                 .orElseThrow(() -> new RuntimeException("To account not found"));
 
         processTransfer(fromAccount, toAccount, BigDecimal.valueOf(transferRequest.getAmount()), transactionFee);
@@ -178,9 +178,12 @@ public class UserService {
             throw new RuntimeException("You are not authorized to transfer from this account");
         }
 
+        BankAccount recipientAccount = accountRepository.findByAccountNumber(transferRequest.getToAccount())
+                .orElseThrow(() -> new RuntimeException("Recipient account not found"));
+
         ScheduledTransfer scheduledTransfer = new ScheduledTransfer();
         scheduledTransfer.setFromAccountId(transferRequest.getFromAccount());
-        scheduledTransfer.setToAccountId(transferRequest.getToAccount());
+        scheduledTransfer.setToAccountId(recipientAccount.getId());
         scheduledTransfer.setAmount(BigDecimal.valueOf(transferRequest.getAmount()));
         scheduledTransfer.setFrequency(transferRequest.getFrequency().toUpperCase());
         scheduledTransfer.setNextExecutionDate(calculateInitialExecutionDate(transferRequest.getFrequency()));

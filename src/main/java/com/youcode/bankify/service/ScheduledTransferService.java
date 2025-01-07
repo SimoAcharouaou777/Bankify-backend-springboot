@@ -1,7 +1,9 @@
 package com.youcode.bankify.service;
 
 import com.youcode.bankify.dto.TransferRequest;
+import com.youcode.bankify.entity.BankAccount;
 import com.youcode.bankify.entity.ScheduledTransfer;
+import com.youcode.bankify.repository.jpa.AccountRepository;
 import com.youcode.bankify.repository.jpa.ScheduledTransferRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -15,7 +17,8 @@ public class ScheduledTransferService {
 
     @Autowired
     private ScheduledTransferRepository scheduledTransferRepository;
-
+    @Autowired
+    private AccountRepository accountRepository;
     @Autowired UserService userService;
 
     @Scheduled(cron = "0 0 0 * * *")
@@ -27,7 +30,10 @@ public class ScheduledTransferService {
             try{
                 TransferRequest transferRequest = new TransferRequest();
                 transferRequest.setFromAccount(transfer.getFromAccountId());
-                transferRequest.setToAccount(transfer.getToAccountId());
+                var toAcc = accountRepository.findById(transfer.getToAccountId())
+                        .orElseThrow(() -> new IllegalArgumentException("Account not found"));
+
+                transferRequest.setToAccount(toAcc.getAccountNumber());
                 transferRequest.setAmount(transfer.getAmount().doubleValue());
                 transferRequest.setTransactionType("PERMANENT");
 
