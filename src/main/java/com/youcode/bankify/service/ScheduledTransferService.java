@@ -33,7 +33,7 @@ public class ScheduledTransferService {
                 var toAcc = accountRepository.findById(transfer.getToAccountId())
                         .orElseThrow(() -> new IllegalArgumentException("Account not found"));
 
-                transferRequest.setToAccount(toAcc.getAccountNumber());
+                transferRequest.setToAccountNumber(toAcc.getAccountNumber());
                 transferRequest.setAmount(transfer.getAmount().doubleValue());
                 transferRequest.setTransactionType("PERMANENT");
 

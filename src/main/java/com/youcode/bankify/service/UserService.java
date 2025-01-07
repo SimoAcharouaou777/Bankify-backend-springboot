@@ -146,7 +146,7 @@ public class UserService {
         BigDecimal transactionFee = calculateTransactionFee(transferRequest.getTransactionType(), transferRequest.getAmount());
         BigDecimal totalDebitAmount = BigDecimal.valueOf(transferRequest.getAmount()).add(transactionFee);
         BankAccount fromAccount = getAccountWithBalanceCheck(transferRequest.getFromAccount(), totalDebitAmount, userId);
-        BankAccount toAccount = accountRepository.findByAccountNumber(transferRequest.getToAccount())
+        BankAccount toAccount = accountRepository.findByAccountNumber(transferRequest.getToAccountNumber())
                 .orElseThrow(() -> new RuntimeException("To account not found"));
 
         processTransfer(fromAccount, toAccount, BigDecimal.valueOf(transferRequest.getAmount()), transactionFee);
@@ -166,7 +166,7 @@ public class UserService {
             throw new RuntimeException("Insufficient funds for scheduled transfer");
         }
 
-        BankAccount toAccount = accountRepository.findByAccountNumber(transferRequest.getToAccount())
+        BankAccount toAccount = accountRepository.findByAccountNumber(transferRequest.getToAccountNumber())
                 .orElseThrow(() -> new RuntimeException("To account not found"));
 
         processTransfer(fromAccount, toAccount, BigDecimal.valueOf(transferRequest.getAmount()), transactionFee);
@@ -178,7 +178,7 @@ public class UserService {
             throw new RuntimeException("You are not authorized to transfer from this account");
         }
 
-        BankAccount recipientAccount = accountRepository.findByAccountNumber(transferRequest.getToAccount())
+        BankAccount recipientAccount = accountRepository.findByAccountNumber(transferRequest.getToAccountNumber())
                 .orElseThrow(() -> new RuntimeException("Recipient account not found"));
 
         ScheduledTransfer scheduledTransfer = new ScheduledTransfer();

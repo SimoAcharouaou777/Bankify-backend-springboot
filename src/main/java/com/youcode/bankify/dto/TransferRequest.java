@@ -8,7 +8,7 @@ import lombok.Setter;
 public class TransferRequest {
 
     private Long fromAccount;
-    private String  toAccount;
+    private String  toAccountNumber;
     private double amount;
     private String transactionType;
     private String frequency;
