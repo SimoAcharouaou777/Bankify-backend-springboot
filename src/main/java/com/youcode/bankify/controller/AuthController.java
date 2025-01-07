@@ -99,7 +99,6 @@ public class AuthController {
 
             User user = refreshToken.getUser();
 
-
             String newAccessToken = jwtUtil.generateToken(user, authService.getAuthorities(user));
 
             Map<String, String> token = new HashMap<>();

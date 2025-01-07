@@ -146,7 +146,7 @@ public class UserService {
         BigDecimal transactionFee = calculateTransactionFee(transferRequest.getTransactionType(), transferRequest.getAmount());
         BigDecimal totalDebitAmount = BigDecimal.valueOf(transferRequest.getAmount()).add(transactionFee);
         BankAccount fromAccount = getAccountWithBalanceCheck(transferRequest.getFromAccount(), totalDebitAmount, userId);
-        BankAccount toAccount = accountRepository.findById(transferRequest.getToAccount())
+        BankAccount toAccount = accountRepository.findByAccountNumber(transferRequest.getToAccount())
                 .orElseThrow(() -> new RuntimeException("To account not found"));
 
         processTransfer(fromAccount, toAccount, BigDecimal.valueOf(transferRequest.getAmount()), transactionFee);
