@@ -24,6 +24,8 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -111,7 +113,7 @@ public class UserService {
      */
     public List<TransactionResponse> getTransactionHistory(Long userId, int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
-        List<Transaction> transactions = transactionRepository.findByUserId(userId, pageable);
+        List<Transaction> transactions = transactionRepository.findByUserIdOrderByDateDesc(userId, pageable);
         return transactions.stream().map(this::mapToTransactionResponse).collect(Collectors.toList());
     }
 
@@ -313,7 +315,7 @@ public class UserService {
         Transaction transaction = new Transaction();
         transaction.setAmount(amount);
         transaction.setType(type);
-        transaction.setDate(LocalDateTime.now());
+        transaction.setDate(OffsetDateTime.now());
         transaction.setBankAccount(account);
         transaction.setUser(account.getUser());
         transaction.setStatus(status);
@@ -346,7 +348,8 @@ public class UserService {
     private TransactionResponse mapToTransactionResponse(Transaction transaction) {
         TransactionResponse dto = new TransactionResponse();
         dto.setAmount(transaction.getAmount());
-        dto.setDate(transaction.getDate());
+        DateTimeFormatter formatter = DateTimeFormatter.ISO_OFFSET_DATE_TIME;
+        dto.setDate(transaction.getDate().format(formatter));
         dto.setType(transaction.getType());
         dto.setStatus(transaction.getStatus());
         dto.setOtherPartyUsername(

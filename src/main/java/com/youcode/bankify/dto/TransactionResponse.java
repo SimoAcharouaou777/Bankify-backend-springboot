@@ -11,7 +11,7 @@ public class TransactionResponse {
     private BigDecimal amount;
     private String type;
     private String otherPartyUsername;
-    private LocalDateTime date;
+    private String date;
     private String status;
 
 

@@ -38,7 +38,7 @@ public class IndexInitializer {
                                 .properties("amount", p -> p.double_(d -> d))
                                 .properties("type", p -> p.keyword(k -> k))
                                 .properties("status", p -> p.keyword(k -> k))
-                                .properties("date", p -> p.date(d -> d.format("epoch_millis||yyyy-MM-dd'T'HH:mm:ss||epoch_millis")))
+                                .properties("date", p -> p.date(d -> d.format("strict_date_time||epoch_millis")))
                                 .properties("bankAccount", p -> p.object(o -> o))
                                 .properties("user", p -> p.object(o -> o))
                         )
