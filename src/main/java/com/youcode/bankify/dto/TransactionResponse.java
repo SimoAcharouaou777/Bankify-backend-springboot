@@ -15,5 +15,4 @@ public class TransactionResponse {
     private String status;
 
 
-
 }

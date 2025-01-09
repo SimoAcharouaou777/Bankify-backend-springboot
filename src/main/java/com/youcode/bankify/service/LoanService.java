@@ -6,6 +6,7 @@ import com.youcode.bankify.entity.Loan;
 import com.youcode.bankify.entity.User;
 import com.youcode.bankify.repository.jpa.LoanRepository;
 import com.youcode.bankify.repository.jpa.UserRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -14,12 +15,11 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
+@RequiredArgsConstructor
 public class LoanService {
-    @Autowired
-    private LoanRepository loanRepository;
 
-    @Autowired
-    private UserRepository userRepository;
+    private final LoanRepository loanRepository;
+    private final UserRepository userRepository;
 
     public Loan applyForLoan(LoanRequestDTO request, Long userId) {
         User user = userRepository.findById(userId)
