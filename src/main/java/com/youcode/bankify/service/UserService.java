@@ -14,6 +14,7 @@ import com.youcode.bankify.repository.jpa.TransactionRepository;
 import com.youcode.bankify.repository.jpa.UserRepository;
 import com.youcode.bankify.repository.elasticsearch.TransactionSearchRepository;
 import com.youcode.bankify.util.JwtUtil;
+import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
@@ -30,6 +31,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
+@RequiredArgsConstructor
 public class UserService {
 
     private final AccountRepository accountRepository;
@@ -38,22 +40,8 @@ public class UserService {
     private final ScheduledTransferRepository scheduledTransferRepository;
     private final TransactionSearchRepository transactionSearchRepository;
     private final JwtUtil jwtUtil;
-    // Inject other necessary services like RoleRepository, etc.
 
-    @Autowired
-    public UserService(AccountRepository accountRepository,
-                       TransactionRepository transactionRepository,
-                       UserRepository userRepository,
-                       ScheduledTransferRepository scheduledTransferRepository,
-                       TransactionSearchRepository transactionSearchRepository,
-                       JwtUtil jwtUtil) {
-        this.accountRepository = accountRepository;
-        this.transactionRepository = transactionRepository;
-        this.userRepository = userRepository;
-        this.scheduledTransferRepository = scheduledTransferRepository;
-        this.transactionSearchRepository = transactionSearchRepository;
-        this.jwtUtil = jwtUtil;
-    }
+
 
     /**
      * Extracts the user ID from the Authentication object.
@@ -173,6 +161,8 @@ public class UserService {
 
         processTransfer(fromAccount, toAccount, BigDecimal.valueOf(transferRequest.getAmount()), transactionFee);
     }
+
+
     public void schedulePermanentTransfer(TransferRequest transferRequest, Long userId) {
         BankAccount fromAccount = accountRepository.findById(transferRequest.getFromAccount())
                 .orElseThrow(() -> new RuntimeException("From account not found"));
@@ -188,7 +178,7 @@ public class UserService {
         scheduledTransfer.setToAccountId(recipientAccount.getId());
         scheduledTransfer.setAmount(BigDecimal.valueOf(transferRequest.getAmount()));
         scheduledTransfer.setFrequency(transferRequest.getFrequency().toUpperCase());
-        scheduledTransfer.setNextExecutionDate(calculateInitialExecutionDate(transferRequest.getFrequency()));
+        scheduledTransfer.setNextExecutionDate(OffsetDateTime.of(calculateInitialExecutionDate(transferRequest.getFrequency()), OffsetDateTime.now().getOffset()));
 
         scheduledTransferRepository.save(scheduledTransfer);
     }
@@ -363,5 +353,13 @@ public class UserService {
     public User getUserById(Long userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
+    }
+
+    public void verifyAccountOwnerShip(Long accountId , Long userId) {
+        BankAccount account = accountRepository.findById(accountId)
+                .orElseThrow(() -> new RuntimeException("Account not found"));
+        if(!account.getUser().getId().equals(userId)) {
+            throw new RuntimeException("Unauthorized access to the account");
+        }
     }
 }

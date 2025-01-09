@@ -2,9 +2,9 @@ package com.youcode.bankify.controller;
 
 import com.youcode.bankify.dto.*;
 import com.youcode.bankify.entity.*;
-import com.youcode.bankify.service.InvoiceService;
-import com.youcode.bankify.service.LoanService;
-import com.youcode.bankify.service.UserService;
+import com.youcode.bankify.service.*;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -19,19 +19,17 @@ import java.util.Map;
 @CrossOrigin(origins = "http://localhost:4200")
 @Slf4j
 @RestController
+@RequiredArgsConstructor
 @RequestMapping("/api/user")
 public class UserController {
 
     private final UserService userService;
     private final InvoiceService invoiceService;
     private final LoanService loanService;
+    private final TransactionService transactionService;
+    private final ScheduledTransferService scheduledTransferService;
 
-    @Autowired
-    public UserController(UserService userService, InvoiceService invoiceService, LoanService loanService) {
-        this.userService = userService;
-        this.invoiceService = invoiceService;
-        this.loanService = loanService;
-    }
+
 
     /**
      * Retrieve bank accounts for the authenticated user.
@@ -90,6 +88,37 @@ public class UserController {
         Long userId = userService.getUserIdFromAuthentication(authentication);
         List<TransactionResponse> transactions = userService.getTransactionHistory(userId, page, size);
         return ResponseEntity.ok(transactions);
+    }
+
+    @GetMapping("/accounts/{accountId}/transactions")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<List<TransactionResponse>> getTransactionsByAccount(
+            Authentication authentication,
+            @PathVariable Long accountId,
+            @RequestParam (defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+
+        Long userId = userService.getUserIdFromAuthentication(authentication);
+        userService.verifyAccountOwnerShip(accountId, userId);
+
+        List<TransactionResponse> transactions = transactionService.getTransactionsByAccountId(accountId, page, size);
+        return ResponseEntity.ok(transactions);
+    }
+
+
+    @GetMapping("/accounts/{accountId}/scheduled-transfers")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<List<ScheduledTransferResponse>> getScheduledTransfersByAccount(
+            Authentication authentication,
+            @PathVariable Long accountId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+
+        Long userId = userService.getUserIdFromAuthentication(authentication);
+        userService.verifyAccountOwnerShip(accountId, userId);
+
+        List<ScheduledTransferResponse> scheduledTransfers = scheduledTransferService.getScheduledTransfersByAccountId(accountId, page, size);
+        return ResponseEntity.ok(scheduledTransfers);
     }
 
     /**
