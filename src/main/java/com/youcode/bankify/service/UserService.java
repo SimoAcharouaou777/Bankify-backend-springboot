@@ -27,7 +27,9 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -361,5 +363,29 @@ public class UserService {
         if(!account.getUser().getId().equals(userId)) {
             throw new RuntimeException("Unauthorized access to the account");
         }
+    }
+
+    public Map<String, Object> getDashboardSummary(Long userId) {
+        BigDecimal totalBalance = accountRepository.findByUserId(userId).stream()
+                .map(BankAccount::getBalance)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        long activeAccounts = accountRepository.findByUserId(userId).stream()
+                .filter(account -> "ACTIVE".equalsIgnoreCase(account.getStatus()))
+                .count();
+
+        long pendingTransactions = transactionRepository.findByUserId(userId).stream()
+                .filter(transaction -> "PENDING".equalsIgnoreCase(transaction.getStatus()))
+                .count();
+
+        List<Transaction> recentTransactions = transactionRepository.findByUserIdOrderByDateDesc(userId, PageRequest.of(0,4));
+
+        Map<String, Object> dashboardSummary = new HashMap<>();
+        dashboardSummary.put("totalBalance", totalBalance);
+        dashboardSummary.put("activeAccounts", activeAccounts);
+        dashboardSummary.put("pendingTransactions", pendingTransactions);
+        dashboardSummary.put("recentTransactions", recentTransactions);
+
+        return dashboardSummary;
     }
 }

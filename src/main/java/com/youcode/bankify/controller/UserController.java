@@ -373,4 +373,11 @@ public class UserController {
             return ResponseEntity.badRequest().body(error);
         }
     }
+
+    @GetMapping("/dashboard-summary")
+    public ResponseEntity<Map<String,Object>> getDashboardSummary(Authentication authentication) {
+        Long userId = userService.getUserIdFromAuthentication(authentication);
+        Map<String,Object> dashboardSummary = userService.getDashboardSummary(userId);
+        return ResponseEntity.ok(dashboardSummary);
+    }
 }

@@ -11,4 +11,5 @@ import java.util.List;
 public interface TransactionRepository extends JpaRepository<Transaction,Long> {
     List<Transaction> findByUserIdOrderByDateDesc(Long userId, Pageable pageable);
     List<Transaction> findByBankAccountId(Long bankAccountId, Pageable pageable);
+    List<Transaction> findByUserId(Long userId);
 }
