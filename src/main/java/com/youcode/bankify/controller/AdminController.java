@@ -7,23 +7,24 @@ import com.youcode.bankify.entity.BankAccount;
 import com.youcode.bankify.entity.User;
 import com.youcode.bankify.service.AdminService;
 import com.youcode.bankify.service.UserService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @CrossOrigin(origins = "http://localhost:4200", allowCredentials = "true")
 @RestController
-@RequestMapping("/api/admin")
+@RequestMapping("api/admin")
+@RequiredArgsConstructor
 public class AdminController {
 
-    @Autowired
-    private AdminService adminService;
-    @Autowired
-    private UserService userService;
+    private final AdminService adminService;
+    private final UserService userService;
 
 
     @PreAuthorize("hasRole('ADMIN')")
@@ -65,6 +66,13 @@ public class AdminController {
     public ResponseEntity<List<BankAccount>> getAllBankAccounts(){
         List<BankAccount> bankAccounts = adminService.getAllBankAccounts();
         return ResponseEntity.ok(bankAccounts);
+    }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping("/dashboard-summary")
+    public ResponseEntity<Map<String, Object>> getDashboardSummary() {
+        Map<String, Object> summary = adminService.getDashboardSummary();
+        return ResponseEntity.ok(summary);
     }
 
 

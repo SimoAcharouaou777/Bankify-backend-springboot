@@ -9,6 +9,7 @@ import com.youcode.bankify.entity.User;
 import com.youcode.bankify.repository.jpa.AccountRepository;
 import com.youcode.bankify.repository.jpa.RoleRepository;
 import com.youcode.bankify.repository.jpa.UserRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -16,21 +17,20 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.Period;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
+@RequiredArgsConstructor
 public class AdminService {
 
-    @Autowired
-    private UserRepository userRepository;
-    @Autowired
-    private AccountRepository accountRepository;
-    @Autowired
-    private RoleRepository roleRepository;
-    @Autowired
-    private PasswordEncoder passwordEncoder;
+    private final UserRepository userRepository;
+    private final AccountRepository accountRepository;
+    private final RoleRepository roleRepository;
+    private final PasswordEncoder passwordEncoder;
 
     public User createUser(RegisterRequest registerRequest){
         User user = new User();
@@ -80,11 +80,11 @@ public class AdminService {
         return userRepository.save(user);
     }
 
-    public ResponseEntity<String > deleteUser(Long userId){
+    public void deleteUser(Long userId){
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
         userRepository.delete(user);
-        return ResponseEntity.ok("User deleted successfullu");
+
     }
 
     public List<User> getAllUsers(){
@@ -101,5 +101,21 @@ public class AdminService {
 
     public List<BankAccount> getAllBankAccounts(){return accountRepository.findAll();}
 
+    public Map<String, Object> getDashboardSummary() {
+        long totalUsers = userRepository.count();
+        long activeAccounts = accountRepository.countByStatus("ACTIVE");
+        long inactiveAccounts = accountRepository.countByStatus("INACTIVE");
+
+        List<User> recentUsers = userRepository.findTop5ByOrderByIdDesc();
+        List<BankAccount> recentAccounts = accountRepository.findTop5ByOrderByIdDesc();
+
+        Map<String, Object> summary = new HashMap<>();
+        summary.put("totalUsers", totalUsers);
+        summary.put("activeAccounts", activeAccounts);
+        summary.put("inactiveAccounts", inactiveAccounts);
+        summary.put("recentUsers", recentUsers);
+        summary.put("recentAccounts", recentAccounts);
+        return summary;
+    }
 
 }

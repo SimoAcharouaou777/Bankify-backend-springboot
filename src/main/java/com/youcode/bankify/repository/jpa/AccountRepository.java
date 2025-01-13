@@ -13,5 +13,6 @@ public interface AccountRepository extends JpaRepository<BankAccount,Long> {
     boolean existsByAccountNumber(String accountNumber);
     Optional<BankAccount> findByAccountNumber(String accountNumber);
     List<BankAccount> findByUserId(Long userId);
-
+    int countByStatus(String status);
+    List<BankAccount> findTop5ByOrderByIdDesc();
 }
