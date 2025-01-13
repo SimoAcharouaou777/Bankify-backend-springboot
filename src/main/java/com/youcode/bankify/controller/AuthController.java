@@ -1,12 +1,14 @@
 package com.youcode.bankify.controller;
 
-import com.youcode.bankify.dto.ErrorResponse;
-import com.youcode.bankify.dto.LoginRequest;
-import com.youcode.bankify.dto.RegisterRequest;
+import com.youcode.bankify.dto.*;
+import com.youcode.bankify.entity.RefreshToken;
 import com.youcode.bankify.entity.User;
+import com.youcode.bankify.exception.UsernameAlreadyExistsException;
 import com.youcode.bankify.service.AuthService;
+import com.youcode.bankify.service.RefreshTokenService;
 import com.youcode.bankify.util.JwtUtil;
 import jakarta.servlet.http.HttpServletRequest;
+import org.apache.http.HttpStatus;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -16,9 +18,8 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 
-@CrossOrigin(origins = "http://localhost:3000", allowCredentials = "true")
+@CrossOrigin(origins = "http://localhost:4200")
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
@@ -26,51 +27,57 @@ public class AuthController {
     private final AuthService authService;
     private final JwtUtil jwtUtil;
     private final AuthenticationManager authenticationManager;
+    private final RefreshTokenService refreshTokenService;
 
     @Autowired
-    public AuthController(AuthService authService, JwtUtil jwtUtil, AuthenticationManager authenticationManager) {
+    public AuthController(AuthService authService, JwtUtil jwtUtil, AuthenticationManager authenticationManager, RefreshTokenService refreshTokenService) {
         this.authService = authService;
         this.jwtUtil = jwtUtil;
         this.authenticationManager = authenticationManager;
+        this.refreshTokenService = refreshTokenService;
     }
 
     @PostMapping("/register")
     public ResponseEntity<?> registerUser(@RequestBody RegisterRequest registerRequest) {
-        String response = authService.register(registerRequest);
-        Map<String, String> responseBody = new HashMap<>();
-
-        if (response.equals("User registered successfully")) {
-            responseBody.put("message", "User registered successfully");
-            return ResponseEntity.ok(responseBody);
-        } else {
-            responseBody.put("message", response);
-            return ResponseEntity.badRequest().body(responseBody);
-        }
+       try {
+           authService.register(registerRequest);
+           return ResponseEntity.ok(new SuccessResponse("User registered successfully"));
+       } catch (UsernameAlreadyExistsException e){
+           return ResponseEntity.status(HttpStatus.SC_CONFLICT).body(new ErrorResponse(e.getMessage()));
+       } catch (Exception e){
+           return ResponseEntity.status(HttpStatus.SC_INTERNAL_SERVER_ERROR).body(new ErrorResponse("Registration failed"));
+       }
     }
 
     @PostMapping("/login")
     public ResponseEntity<?> loginUser(@RequestBody LoginRequest loginRequest) {
-       try{
+        try {
+            // Authenticate the user
             authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(loginRequest.getUsername(), loginRequest.getPassword())
             );
-            final User user = authService.getUserByUsername(loginRequest.getUsername())
+
+            // Fetch user details
+            User user = authService.getUserByUsername(loginRequest.getUsername())
                     .orElseThrow(() -> new RuntimeException("User not found"));
-            final String accessToken = jwtUtil.generateToken(user);
 
-            final String refreshToken = jwtUtil.generateRefreshToken(user);
+            // Generate tokens
+            String accessToken = jwtUtil.generateToken(user, authService.getAuthorities(user));
+            RefreshToken refreshToken = refreshTokenService.createRefreshToken(user);
+            String role = user.getRoles().stream()
+                    .findFirst()
+                    .map(r -> r.getName().replace("ROLE_", ""))
+                    .orElse(null);
 
-            if(accessToken == null || accessToken.split("\\.").length != 3){
-                return ResponseEntity.status(500).body("Internal server error: Invalid JWT format");
-            }
+            Map<String, String> tokens = new HashMap<>();
+            tokens.put("accessToken", accessToken);
+            tokens.put("refreshToken", refreshToken.getToken());
+            tokens.put("role", role);
 
-            Map<String , String > response = new HashMap<>();
-            response.put("token", accessToken);
-            response.put("refreshToken", refreshToken);
-            return ResponseEntity.ok(response);
-       } catch (AuthenticationException e){
-           return ResponseEntity.status(401).body("Invalid username or password");
-       }
+            return ResponseEntity.ok(tokens);
+        } catch (AuthenticationException e){
+            return ResponseEntity.status(401).body(new ErrorResponse("Invalid username or password"));
+        }
     }
 
     @PostMapping("/refresh")
@@ -78,21 +85,50 @@ public class AuthController {
         String authorizationHeader = request.getHeader("Authorization");
 
         if(authorizationHeader == null || !authorizationHeader.startsWith("Bearer ")){
-            return ResponseEntity.status(401).body("Refresh token is missing or invalid.");
+            return ResponseEntity.status(HttpStatus.SC_UNAUTHORIZED).body(new ErrorResponse("Refresh token is missing"));
         }
 
-        String refreshToken = authorizationHeader.substring(7);
+        String refreshTokenStr = authorizationHeader.substring(7);
 
         try{
-            String username = jwtUtil.extractUsername(refreshToken);
-            if(jwtUtil.isTokenExpired(refreshToken)){
-                return ResponseEntity.status(401).body("Refresh token is expired.");
+
+            RefreshToken refreshToken = refreshTokenService.findByToken(refreshTokenStr)
+                    .orElseThrow(() -> new RuntimeException("Refresh token not found"));
+
+            refreshTokenService.verifyExpiration(refreshToken);
+
+            User user = refreshToken.getUser();
+
+            String newAccessToken = jwtUtil.generateToken(user, authService.getAuthorities(user));
+
+            Map<String, String> token = new HashMap<>();
+            token.put("accessToken", newAccessToken);
+            return ResponseEntity.ok(token);
+        } catch(Exception e){
+            return ResponseEntity.status(500).body("Internal server error: " + e.getMessage());
+        }
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<?> logoutUser(@RequestBody LogoutRequest logoutRequest, @RequestHeader(name = "Authorization", required = false) String authorizationHeader) {
+
+        String refreshToken = logoutRequest.getRefreshToken();
+
+        if(refreshToken == null || refreshToken.isEmpty()){
+            return ResponseEntity.badRequest().body(new ErrorResponse("Refresh token is missing"));
+        }
+
+        try{
+            authService.invalidateRefreshToken(refreshToken);
+            if(authorizationHeader != null && authorizationHeader.startsWith("Bearer ")){
+                String accessToken = authorizationHeader.substring(7);
+                authService.blacklistAccessToken(accessToken);
             }
 
-            final String newAccessToken = jwtUtil.generateToken(authService.getUserByUsername(username).orElseThrow());
-            return ResponseEntity.ok(newAccessToken);
-        }catch(Exception e){
-            return ResponseEntity.status(500).body("Internal server error: " + e.getMessage());
+            return ResponseEntity.ok(new SuccessResponse("User logged out successfully"));
+
+        }catch (Exception e){
+            return ResponseEntity.status(500).body(new ErrorResponse("Internal server error: " + e.getMessage()));
         }
     }
 }

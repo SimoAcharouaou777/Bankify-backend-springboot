@@ -7,6 +7,7 @@ import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 @Entity
 @Table(name = "scheduled_transfer")
@@ -31,9 +32,9 @@ public class ScheduledTransfer {
     private String frequency;
 
     @Column(nullable = false)
-    private LocalDateTime nextExecutionDate;
+    private OffsetDateTime nextExecutionDate;
 
     @Column
-    private LocalDateTime endDate;
+    private OffsetDateTime endDate;
 
 }
