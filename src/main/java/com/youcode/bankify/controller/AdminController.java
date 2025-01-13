@@ -2,79 +2,77 @@ package com.youcode.bankify.controller;
 
 
 import com.youcode.bankify.dto.RegisterRequest;
+import com.youcode.bankify.dto.UpdatedUserRequest;
 import com.youcode.bankify.entity.BankAccount;
 import com.youcode.bankify.entity.User;
 import com.youcode.bankify.service.AdminService;
 import com.youcode.bankify.service.UserService;
-import jakarta.servlet.http.HttpSession;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
-@CrossOrigin(origins = "http://localhost:3000", allowCredentials = "true")
+@CrossOrigin(origins = "http://localhost:4200", allowCredentials = "true")
 @RestController
-@RequestMapping("/api/admin")
+@RequestMapping("api/admin")
+@RequiredArgsConstructor
 public class AdminController {
 
-    @Autowired
-    private AdminService adminService;
-    @Autowired
-    private UserService userService;
+    private final AdminService adminService;
+    private final UserService userService;
 
-    private void checkAdminRole(HttpSession session){
-        Set<String> roles = (Set<String>) session.getAttribute("roles");
-        if(roles == null ){
-            System.out.println("Roles are null in session , access denied");
-            throw new RuntimeException("Access denied ");
-        } else if (!roles.contains("ADMIN")) {
-            System.out.println("User does not have ADMIN role , roles present : "+roles);
-            throw new RuntimeException("Access denied");
-        }
-        System.out.println("Access granted. Roles: " +roles);
-    }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/users")
-    public ResponseEntity<User> createUser(HttpSession session, @RequestBody RegisterRequest registerRequest){
-        checkAdminRole(session);
+    public ResponseEntity<User> createUser( @RequestBody RegisterRequest registerRequest){
         User createdUser = adminService.createUser(registerRequest);
         return ResponseEntity.ok(createdUser);
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/users/{id}")
-    public ResponseEntity<User> updateUser(HttpSession session, @PathVariable Long id , @RequestBody User user){
-        checkAdminRole(session);
-        User updatedUser = adminService.updateUser(id,user);
+    public ResponseEntity<User> updateUser( @PathVariable Long id , @RequestBody UpdatedUserRequest userDetails){
+        User updatedUser = adminService.updateUser(id,userDetails);
         return ResponseEntity.ok(updatedUser);
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/users/{id}")
-    public ResponseEntity<?> deleteUser( HttpSession session, @PathVariable Long id){
-        checkAdminRole(session);
+    public ResponseEntity<?> deleteUser( @PathVariable Long id){
         adminService.deleteUser(id);
         return ResponseEntity.noContent().build();
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/users")
-    public ResponseEntity<List<User>> getAllUsers(HttpSession session){
-        checkAdminRole(session);
+    public ResponseEntity<List<User>> getAllUsers(){
         List<User> users = adminService.getAllUsers();
         return ResponseEntity.ok(users);
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/accounts/{accountId}/status")
-    public ResponseEntity<BankAccount> updateAccountStatus(HttpSession session, @PathVariable Long accountId, @RequestParam String status){
-        checkAdminRole(session);
+    public ResponseEntity<BankAccount> updateAccountStatus(@PathVariable Long accountId, @RequestParam String status){
         BankAccount updatedAccount = adminService.updateAccountStatus(accountId, status);
         return ResponseEntity.ok(updatedAccount);
     }
+    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/accounts")
-    public ResponseEntity<List<BankAccount>> getAllBankAccounts(HttpSession session){
-        checkAdminRole(session);
+    public ResponseEntity<List<BankAccount>> getAllBankAccounts(){
         List<BankAccount> bankAccounts = adminService.getAllBankAccounts();
         return ResponseEntity.ok(bankAccounts);
+    }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping("/dashboard-summary")
+    public ResponseEntity<Map<String, Object>> getDashboardSummary() {
+        Map<String, Object> summary = adminService.getDashboardSummary();
+        return ResponseEntity.ok(summary);
     }
 
 

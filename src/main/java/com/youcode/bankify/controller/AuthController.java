@@ -1,89 +1,134 @@
 package com.youcode.bankify.controller;
 
-
-import com.youcode.bankify.dto.ErrorResponse;
-import com.youcode.bankify.dto.LoginRequest;
-import com.youcode.bankify.dto.RegisterRequest;
-import com.youcode.bankify.entity.Role;
+import com.youcode.bankify.dto.*;
+import com.youcode.bankify.entity.RefreshToken;
 import com.youcode.bankify.entity.User;
+import com.youcode.bankify.exception.UsernameAlreadyExistsException;
 import com.youcode.bankify.service.AuthService;
-import jakarta.servlet.http.HttpSession;
+import com.youcode.bankify.service.RefreshTokenService;
+import com.youcode.bankify.util.JwtUtil;
+import jakarta.servlet.http.HttpServletRequest;
+import org.apache.http.HttpStatus;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.stream.Collectors;
 
-@CrossOrigin(origins = "http://localhost:3000", allowCredentials = "true")
+@CrossOrigin(origins = "http://localhost:4200")
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
 
     private final AuthService authService;
+    private final JwtUtil jwtUtil;
+    private final AuthenticationManager authenticationManager;
+    private final RefreshTokenService refreshTokenService;
 
     @Autowired
-    public AuthController(AuthService authService){
+    public AuthController(AuthService authService, JwtUtil jwtUtil, AuthenticationManager authenticationManager, RefreshTokenService refreshTokenService) {
         this.authService = authService;
+        this.jwtUtil = jwtUtil;
+        this.authenticationManager = authenticationManager;
+        this.refreshTokenService = refreshTokenService;
     }
 
     @PostMapping("/register")
-    public ResponseEntity<?> registerUser(@RequestBody RegisterRequest registerRequest){
-        String response = authService.register(registerRequest);
-        Map<String , String > responseBody = new HashMap<>();
-
-        if(response.equals("user registered sucessfully")){
-            responseBody.put("message" , "User registered successfully");
-            return ResponseEntity.ok(responseBody);
-        }else{
-            responseBody.put("message", response);
-            return ResponseEntity.badRequest().body(responseBody);
-        }
+    public ResponseEntity<?> registerUser(@RequestBody RegisterRequest registerRequest) {
+       try {
+           authService.register(registerRequest);
+           return ResponseEntity.ok(new SuccessResponse("User registered successfully"));
+       } catch (UsernameAlreadyExistsException e){
+           return ResponseEntity.status(HttpStatus.SC_CONFLICT).body(new ErrorResponse(e.getMessage()));
+       } catch (Exception e){
+           return ResponseEntity.status(HttpStatus.SC_INTERNAL_SERVER_ERROR).body(new ErrorResponse("Registration failed"));
+       }
     }
 
     @PostMapping("/login")
-    public ResponseEntity<?> loginUser(@RequestBody LoginRequest loginRequest, HttpSession session){
+    public ResponseEntity<?> loginUser(@RequestBody LoginRequest loginRequest) {
+        try {
+            // Authenticate the user
+            authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(loginRequest.getUsername(), loginRequest.getPassword())
+            );
 
-        String response = authService.authenticate(loginRequest.getUsername(), loginRequest.getPassword());
-        if(response.equals("Authentication successful")){
-            Optional<User> optionalUser = authService.getUserByUsername(loginRequest.getUsername());
-            if(optionalUser.isEmpty()){
-                return ResponseEntity.status(401).body(new ErrorResponse("User not found"));
-            }
-            User user = optionalUser.get();
+            // Fetch user details
+            User user = authService.getUserByUsername(loginRequest.getUsername())
+                    .orElseThrow(() -> new RuntimeException("User not found"));
 
-            Set<String > roles = user.getRoles().stream().map(Role::getName).collect(Collectors.toSet());
-            session.setAttribute("userId", user.getId());
-            session.setAttribute("username", user.getUsername());
-            session.setAttribute("roles", roles);
+            // Generate tokens
+            String accessToken = jwtUtil.generateToken(user, authService.getAuthorities(user));
+            RefreshToken refreshToken = refreshTokenService.createRefreshToken(user);
+            String role = user.getRoles().stream()
+                    .findFirst()
+                    .map(r -> r.getName().replace("ROLE_", ""))
+                    .orElse(null);
 
-            System.out.println("Session ID after login : "+session.getId());
-            System.out.println("Roles in session after login : "+roles);
+            Map<String, String> tokens = new HashMap<>();
+            tokens.put("accessToken", accessToken);
+            tokens.put("refreshToken", refreshToken.getToken());
+            tokens.put("role", role);
 
-            Map<String , Object> responseBody = new HashMap<>();
-            responseBody.put("message", "user logged in successfully");
-            responseBody.put("sessionId", session.getId());
-            responseBody.put("username", session.getAttribute("username"));
-            responseBody.put("roles", session.getAttribute("roles"));
-            return ResponseEntity.ok(responseBody);
-        } else {
-            return ResponseEntity.badRequest().body(new ErrorResponse(response));
+            return ResponseEntity.ok(tokens);
+        } catch (AuthenticationException e){
+            return ResponseEntity.status(401).body(new ErrorResponse("Invalid username or password"));
+        }
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<?> refreshToken(HttpServletRequest request) {
+        String authorizationHeader = request.getHeader("Authorization");
+
+        if(authorizationHeader == null || !authorizationHeader.startsWith("Bearer ")){
+            return ResponseEntity.status(HttpStatus.SC_UNAUTHORIZED).body(new ErrorResponse("Refresh token is missing"));
+        }
+
+        String refreshTokenStr = authorizationHeader.substring(7);
+
+        try{
+
+            RefreshToken refreshToken = refreshTokenService.findByToken(refreshTokenStr)
+                    .orElseThrow(() -> new RuntimeException("Refresh token not found"));
+
+            refreshTokenService.verifyExpiration(refreshToken);
+
+            User user = refreshToken.getUser();
+
+            String newAccessToken = jwtUtil.generateToken(user, authService.getAuthorities(user));
+
+            Map<String, String> token = new HashMap<>();
+            token.put("accessToken", newAccessToken);
+            return ResponseEntity.ok(token);
+        } catch(Exception e){
+            return ResponseEntity.status(500).body("Internal server error: " + e.getMessage());
         }
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<String> logout(HttpSession session){
-        if(session == null || session.getAttribute("userId") == null){
-            return ResponseEntity.status(401).body("No user is curently logged in");
+    public ResponseEntity<?> logoutUser(@RequestBody LogoutRequest logoutRequest, @RequestHeader(name = "Authorization", required = false) String authorizationHeader) {
+
+        String refreshToken = logoutRequest.getRefreshToken();
+
+        if(refreshToken == null || refreshToken.isEmpty()){
+            return ResponseEntity.badRequest().body(new ErrorResponse("Refresh token is missing"));
         }
-        Long userId = (Long) session.getAttribute("userId");
-        String username = (String) session.getAttribute("username");
-        session.invalidate();
-        return ResponseEntity.ok(" user" +username+" (ID : "+userId+ ") logged out successfulluy");
+
+        try{
+            authService.invalidateRefreshToken(refreshToken);
+            if(authorizationHeader != null && authorizationHeader.startsWith("Bearer ")){
+                String accessToken = authorizationHeader.substring(7);
+                authService.blacklistAccessToken(accessToken);
+            }
+
+            return ResponseEntity.ok(new SuccessResponse("User logged out successfully"));
+
+        }catch (Exception e){
+            return ResponseEntity.status(500).body(new ErrorResponse("Internal server error: " + e.getMessage()));
+        }
     }
-
-
 }
